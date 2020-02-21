@@ -1,0 +1,27 @@
+parameters:
+  instance_name:
+  image_name: 
+  os_volume_size: 
+  data_volume_size:
+  instance_flavor:
+  security_group:
+  key_name: 
+  private_net: 
+  private_subnet: 
+  # list of private IP's to assign to created instances
+  private_ip: ["192.168.0.10", "192.168.0.20", "192.168.0.30"]
+  configure_private_ip:
+  # Name of the network with public access used for floating IP
+  public_net: 
+  # list of floating IP's to assign to created instances 
+  floating_ip: ["10.10.10.10", "10.10.10.20", "10.10.10.30"] 
+  configure_floating_ip_manually:
+  configure_floating_ip_dhcp:
+  metadata:
+  
+  project_user: 
+  ssh_pub_key: 
+  # hash of a root password to be configured on an instance
+  root_password: 
+  
+  server_count: 1

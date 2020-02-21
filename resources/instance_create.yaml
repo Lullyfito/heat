@@ -1,0 +1,264 @@
+heat_template_version: 2018-08-31
+
+description: Creating a nova instance
+
+parameters:
+  instance_name:
+    type: string
+    default: instance
+  image_name: 
+    type: string
+    description: Used glance image to boot an instance
+  os_volume_size:
+    type: number
+    description: OS Volume size in GB
+  data_volume_size:
+    type: number
+    description: Data Volume size in GB
+  instance_flavor:
+    type: string
+  security_group:
+    type: string
+    default: haee
+    description: Security group for instance port
+  key_name:
+    type: string
+    description: SSH pub key to be setup for the user specified in 'project_user' parameter
+  private_net:
+    type: string
+    default: haee
+    description: Name of private network into which server get deployed
+  private_subnet:
+    type: string
+    default: haee
+    description: Name of private subnet into which server get deployed
+  private_ip:
+    type: comma_delimited_list
+    description: List of private IP's to be assigned to the deployed instances
+  configure_private_ip:
+    type: boolean
+    default: no
+  public_net:
+    type: string
+    description: Name of the network with public access used for floating IP
+  floating_ip:
+    type: comma_delimited_list
+    description: List of floating IP's to be assigned to the deployed instances
+  configure_floating_ip_manually:
+    type: boolean
+    default: no
+  configure_floating_ip_dhcp:
+    type: boolean
+    default: no
+  metadata:
+    type: json
+    default: { }
+    
+  project_user:
+    type: string
+    description: Name of the default user to be configured on the instance with access and permissions
+  ssh_pub_key:
+    type: string
+    description: Public ssh key for the project_user parameter
+  root_password:
+    type: string
+    description: hash of a root password to be configured on an instance
+    
+  index:
+    type: number
+    description: Index number of a spawned instance
+
+
+
+resources:
+# instance creation with ephemeral (temporary) root disk
+  my_server:
+    type: OS::Nova::Server
+    condition: os_volume_size_is_zero
+    depends_on: [ my_server_port ]
+    properties:
+      name: { get_param: instance_name }
+      image: { get_param: image_name }
+      flavor: { get_param: instance_flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - port: { get_resource: my_server_port }
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: server_init }
+      metadata: {get_param: metadata}
+      
+# instance creation with persistant cinder OS volume
+  my_server_os_volume:
+    type: OS::Nova::Server
+    condition: os_volume_size_is_not_zero
+    depends_on: [ my_server_port, os_volume ]
+    properties:
+      name: { get_param: instance_name }
+      block_device_mapping:
+        - device_name: vda
+          delete_on_termination: true
+          volume_id: { get_resource: os_volume }
+      flavor: { get_param: instance_flavor }
+      key_name: { get_param: key_name }
+      networks:
+        - port: { get_resource: my_server_port }
+      user_data_format: SOFTWARE_CONFIG
+      user_data: { get_resource: server_init }
+      metadata: {get_param: metadata}
+
+# creation of network port for the instance
+  my_server_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: private_net }
+      fixed_ips:
+        if:
+        - "configure_private_ip_manually"
+        - - subnet: { get_param: private_subnet }
+            ip_address: { get_param: [private_ip, get_param: index] }
+        - - subnet: { get_param: private_subnet }
+      security_groups: [{ get_param: security_group }]
+      
+# optional resources
+
+# OS volume creation
+
+  os_volume:
+    type: OS::Cinder::Volume
+    condition: os_volume_size_is_not_zero
+    properties:
+      size: { get_param: os_volume_size }
+      image: { get_param: image_name }
+      name: 
+        list_join:
+          - "_"
+          - [{ get_param: instance_name }, 'os']
+          
+# data volume creation
+
+  data_volume:
+    type: OS::Cinder::Volume
+    condition: data_volume_size_is_not_zero
+    properties:
+      size: { get_param: data_volume_size }
+      name: 
+        list_join:
+          - "_"
+          - [{ get_param: instance_name }, 'data']
+    
+  data_volume_attach:
+    type: OS::Cinder::VolumeAttachment
+    condition: data_volume_size_is_not_zero
+    depends_on: [ data_volume ]
+    properties:
+      instance_uuid:
+        if:
+        - "os_volume_size_is_zero"
+        - get_resource: my_server
+        - get_resource: my_server_os_volume
+      volume_id: { get_resource: data_volume }
+
+# floating IP
+
+  my_server_floating_ip_manually:
+    type: OS::Neutron::FloatingIP
+    condition: create_floating_ip_manually
+    properties:
+      floating_network: { get_param: public_net } 
+      floating_ip_address: { get_param: [floating_ip, get_param: index] }
+
+  my_server_floating_ip_manually_association:
+    type: OS::Neutron::FloatingIPAssociation
+    condition: create_floating_ip_manually
+    depends_on: [ my_server_floating_ip_manually, my_server_port ]
+    properties:
+      floatingip_id: { get_resource: my_server_floating_ip_manually }
+      port_id: { get_resource: my_server_port }
+      
+  my_server_floating_ip_dhcp:
+    type: OS::Neutron::FloatingIP
+    condition: create_floating_ip_dhcp
+    properties:
+      floating_network: { get_param: public_net } 
+
+  my_server_floating_ip_dhcp_association:
+    type: OS::Neutron::FloatingIPAssociation
+    condition: create_floating_ip_dhcp
+    depends_on: [ my_server_floating_ip_dhcp, my_server_port ]
+    properties:
+      floatingip_id: { get_resource: my_server_floating_ip_dhcp }
+      port_id: { get_resource: my_server_port }
+
+# cloud-config resources
+
+  user_management:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: cloud-config
+      config:
+        str_replace:
+          template: { get_file: ../userdata/user_management }
+          params: 
+            $user: { get_param: project_user }
+            $ssh_pub_key: { get_param: ssh_pub_key }
+            $root_pw: { get_param: root_password }
+        
+
+  epel_repo:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: cloud-config
+      config: { get_file: ../userdata/epel_repo }
+
+  server_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: { get_resource: user_management }
+      - config: { get_resource: epel_repo }
+
+outputs:
+  instance_ip:
+    condition: os_volume_size_is_zero
+    description: IP address of the deployed compute instance
+    value: { get_attr: [my_server, first_address] }
+  
+  instance_ip_volume:
+    condition: os_volume_size_is_not_zero
+    description: IP address of the deployed compute instance
+    value: { get_attr: [my_server_os_volume, first_address] }
+
+  my_server_public_ip_manually:
+    condition: create_floating_ip_manually
+    description: The public IP address of the server
+    value: { get_attr: [my_server_floating_ip_manually, floating_ip_address] }
+    
+  my_server_public_ip_dhcp:
+    condition: create_floating_ip_dhcp
+    description: The public IP address of the server
+    value: { get_attr: [my_server_floating_ip_dhcp, floating_ip_address] }
+
+conditions:
+  configure_private_ip_manually:
+    equals:
+      - get_param: configure_private_ip
+      - yes
+  create_floating_ip_manually:
+    equals:
+      - get_param: configure_floating_ip_manually
+      - yes
+  create_floating_ip_dhcp:
+    equals:
+      - get_param: configure_floating_ip_dhcp
+      - yes
+  os_volume_size_is_zero:
+    equals:
+    - get_param: os_volume_size
+    - 0
+  os_volume_size_is_not_zero:
+    not: os_volume_size_is_zero
+  data_volume_size_is_not_zero:
+    not:
+      equals:
+        - get_param: data_volume_size
+        - 0

@@ -1,0 +1,104 @@
+heat_template_version: 2018-08-31
+
+description: Creating multiple instances
+
+parameters:
+  instance_name:
+    type: string
+    default: instance
+  image_name: 
+    type: string
+    description: Used glance image to boot an instance
+  os_volume_size:
+    type: number
+    description: OS Volume size in GB
+  data_volume_size:
+    type: number
+    description: Data Volume size in GB
+  instance_flavor:
+    type: string
+  security_group:
+    type: string
+    default: haee
+    description: Security group for instance port
+  key_name:
+    type: string
+    description: SSH pub key to be setup for the user specified in 'project_user' parameter
+  private_net:
+    type: string
+    default: haee
+    description: Name of private network into which server get deployed
+  private_subnet:
+    type: string
+    default: haee
+    description: Name of private subnet into which server get deployed
+  private_ip:
+    type: comma_delimited_list
+    description: List of private IP's to be assigned to the deployed instances
+  configure_private_ip:
+    type: boolean
+    default: no
+  public_net:
+    type: string
+    description: Name of the network with public access used for floating IP
+  floating_ip:
+    type: comma_delimited_list
+    description: List of floating IP's to be assigned to the deployed instances
+  configure_floating_ip_manually:
+    type: boolean
+    default: no
+  configure_floating_ip_dhcp:
+    type: boolean
+    default: no
+  metadata:
+    type: json
+    default: { }
+    
+  project_user:
+    type: string
+    description: Name of the default user to be configured on the instance with access and permissions
+  ssh_pub_key:
+    type: string
+    description: Public ssh key for the project_user parameter
+  root_password:
+    type: string
+    description: hash of a root password to be configured on an instance
+    
+  server_count:
+    type: number
+
+
+resources:
+  
+  my_indexed_group:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: server_count }
+      resource_def:
+        type: ./instance_create.yaml 
+        properties:
+          instance_name:
+            list_join:
+              - "_"
+              - [{ get_param: instance_name }, '%index%']
+          image_name: { get_param: image_name }
+          os_volume_size: { get_param: os_volume_size }
+          data_volume_size: { get_param: data_volume_size }
+          instance_flavor: { get_param: instance_flavor }
+          security_group: { get_param: security_group }
+          key_name: { get_param: key_name }
+          private_net: { get_param: private_net }
+          private_subnet: { get_param: private_subnet }
+          private_ip: { get_param: private_ip }
+          configure_private_ip: { get_param: configure_private_ip }
+          public_net: { get_param: public_net }
+          floating_ip: { get_param: floating_ip }
+          configure_floating_ip_manually: { get_param: configure_floating_ip_manually }
+          configure_floating_ip_dhcp: { get_param: configure_floating_ip_dhcp }
+          metadata: { get_param: metadata }
+          
+          project_user: { get_param: project_user }
+          ssh_pub_key: { get_param: ssh_pub_key }
+          root_password: { get_param: root_password }
+          
+          index: "%index%"
