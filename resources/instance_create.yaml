@@ -12,6 +12,16 @@ parameters:
   os_volume_size:
     type: number
     description: OS Volume size in GB
+  restore_os_type_source_snapshot:
+    type: boolean
+    default: no
+  restore_os_snapshot_id:
+    type: comma_delimited_list
+  restore_os_type_source_volume:
+    type: boolean
+    default: no
+  restore_os_volume_id:
+    type: comma_delimited_list
   data_volume_size:
     type: number
     description: Data Volume size in GB
@@ -95,9 +105,18 @@ resources:
     properties:
       name: { get_param: instance_name }
       block_device_mapping:
-        - device_name: vda
-          delete_on_termination: true
-          volume_id: { get_resource: os_volume }
+        if:
+        - "restore_os_type_source_snapshot_is_true"
+        - - device_name: vda
+            delete_on_termination: true
+            snapshot_id: { get_param: [restore_os_snapshot_id, get_param: index] }
+        - - device_name: vda
+            delete_on_termination: true
+            volume_id: 
+              if:
+              - "restore_os_type_source_volume_is_true"
+              - { get_param: [restore_os_volume_id, get_param: index] }
+              - { get_resource: os_volume }
       flavor: { get_param: instance_flavor }
       key_name: { get_param: key_name }
       networks:
@@ -157,6 +176,13 @@ resources:
         - get_resource: my_server
         - get_resource: my_server_os_volume
       volume_id: { get_resource: data_volume }
+      
+#  restore_data_volume_attach:
+#    type: OS::Cinder::VolumeAttachment
+#    condition: restore_os_volume_is_true
+#    properties:
+#      instance_uuid: { get_resource: my_server_os_volume }
+#      volume_id: { get_param: [restore_data_volume_id, get_param: index] }
 
 # floating IP
 
@@ -257,6 +283,14 @@ conditions:
     - 0
   os_volume_size_is_not_zero:
     not: os_volume_size_is_zero
+  restore_os_type_source_volume_is_true:
+    equals:
+      - get_param: restore_os_type_source_volume
+      - yes
+  restore_os_type_source_snapshot_is_true:
+    equals:
+      - get_param: restore_os_type_source_snapshot
+      - yes
   data_volume_size_is_not_zero:
     not:
       equals:

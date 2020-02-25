@@ -2,6 +2,10 @@ parameters:
   instance_name:
   image_name: 
   os_volume_size: 
+  restore_os_type_source_snapshot:
+  restore_os_snapshot_id:
+  restore_os_type_source_volume:
+  restore_os_volume_id:
   data_volume_size:
   instance_flavor:
   security_group:
