@@ -3,21 +3,18 @@ parameters:
   image_name: 
   os_volume_size: 
   restore_os_type_source_snapshot:
-  restore_os_snapshot_id:
+  restore_os_snapshot_id: "snap_id_1,snap_id_2,snap_id_3"
   restore_os_type_source_volume:
-  restore_os_volume_id:
+  restore_os_volume_id: "vol_id_1,vol_id_2,vol_id_3"
   data_volume_size:
   instance_flavor:
   security_group:
   key_name: 
   private_net: 
   private_subnet: 
-  # list of private IP's to assign to created instances
   private_ip: ["192.168.0.10", "192.168.0.20", "192.168.0.30"]
   configure_private_ip:
-  # Name of the network with public access used for floating IP
   public_net: 
-  # list of floating IP's to assign to created instances 
   floating_ip: ["10.10.10.10", "10.10.10.20", "10.10.10.30"] 
   configure_floating_ip_manually:
   configure_floating_ip_dhcp:
@@ -25,7 +22,6 @@ parameters:
   
   project_user: 
   ssh_pub_key: 
-  # hash of a root password to be configured on an instance
   root_password: 
   
   server_count: 1

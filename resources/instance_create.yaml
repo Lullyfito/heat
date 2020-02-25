@@ -1,6 +1,6 @@
 heat_template_version: 2018-08-31
 
-description: Creating a nova instance
+description: Creating a nova instance with private network, public network, attached floating IP's, attached data volumes
 
 parameters:
   instance_name:
@@ -11,17 +11,22 @@ parameters:
     description: Used glance image to boot an instance
   os_volume_size:
     type: number
+    default: 0
     description: OS Volume size in GB
   restore_os_type_source_snapshot:
     type: boolean
     default: no
+    description: Whether instances' OS volume should be created from a volume snapshot
   restore_os_snapshot_id:
     type: comma_delimited_list
+    description: List of snapshot ID's to restore OS volume
   restore_os_type_source_volume:
     type: boolean
     default: no
+    description: Whether instances' OS volume should be created from an already existing volume
   restore_os_volume_id:
     type: comma_delimited_list
+    description: List of volume ID's to restore OS volume
   data_volume_size:
     type: number
     description: Data Volume size in GB
@@ -48,6 +53,7 @@ parameters:
   configure_private_ip:
     type: boolean
     default: no
+    description: Whether to assign private IP's manually
   public_net:
     type: string
     description: Name of the network with public access used for floating IP
@@ -57,9 +63,11 @@ parameters:
   configure_floating_ip_manually:
     type: boolean
     default: no
+    description: Whether to assign floating IP's manually
   configure_floating_ip_dhcp:
     type: boolean
     default: no
+    description: Whether to assign floating IP's via dhcp
   metadata:
     type: json
     default: { }
@@ -84,7 +92,7 @@ resources:
 # instance creation with ephemeral (temporary) root disk
   my_server:
     type: OS::Nova::Server
-    condition: os_volume_size_is_zero
+    condition: os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true
     depends_on: [ my_server_port ]
     properties:
       name: { get_param: instance_name }
@@ -100,7 +108,7 @@ resources:
 # instance creation with persistant cinder OS volume
   my_server_os_volume:
     type: OS::Nova::Server
-    condition: os_volume_size_is_not_zero
+    condition: os_volume_size_is_not_zero_or_restore_os_type_source_volume_is_true_or_restore_os_type_source_snapshot_is_true
     depends_on: [ my_server_port, os_volume ]
     properties:
       name: { get_param: instance_name }
@@ -172,18 +180,11 @@ resources:
     properties:
       instance_uuid:
         if:
-        - "os_volume_size_is_zero"
+        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
         - get_resource: my_server
         - get_resource: my_server_os_volume
       volume_id: { get_resource: data_volume }
       
-#  restore_data_volume_attach:
-#    type: OS::Cinder::VolumeAttachment
-#    condition: restore_os_volume_is_true
-#    properties:
-#      instance_uuid: { get_resource: my_server_os_volume }
-#      volume_id: { get_param: [restore_data_volume_id, get_param: index] }
-
 # floating IP
 
   my_server_floating_ip_manually:
@@ -245,12 +246,12 @@ resources:
 
 outputs:
   instance_ip:
-    condition: os_volume_size_is_zero
+    condition: os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true
     description: IP address of the deployed compute instance
     value: { get_attr: [my_server, first_address] }
   
   instance_ip_volume:
-    condition: os_volume_size_is_not_zero
+    condition: os_volume_size_is_not_zero_or_restore_os_type_source_volume_is_true_or_restore_os_type_source_snapshot_is_true
     description: IP address of the deployed compute instance
     value: { get_attr: [my_server_os_volume, first_address] }
 
@@ -291,6 +292,16 @@ conditions:
     equals:
       - get_param: restore_os_type_source_snapshot
       - yes
+  os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true:
+    and:
+      - os_volume_size_is_zero
+      - not: restore_os_type_source_volume_is_true
+      - not: restore_os_type_source_snapshot_is_true
+  os_volume_size_is_not_zero_or_restore_os_type_source_volume_is_true_or_restore_os_type_source_snapshot_is_true:
+    or:
+      - os_volume_size_is_not_zero
+      - restore_os_type_source_volume_is_true
+      - restore_os_type_source_snapshot_is_true
   data_volume_size_is_not_zero:
     not:
       equals:

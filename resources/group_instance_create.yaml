@@ -11,6 +11,7 @@ parameters:
     description: Used glance image to boot an instance
   os_volume_size:
     type: number
+    default: 0
     description: OS Volume size in GB
   restore_os_type_source_snapshot:
     type: boolean
