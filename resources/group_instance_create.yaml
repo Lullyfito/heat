@@ -18,14 +18,17 @@ parameters:
     default: no
   restore_os_snapshot_id:
     type: comma_delimited_list
+    default: ""
   restore_os_type_source_volume:
     type: boolean
     default: no
   restore_os_volume_id:
     type: comma_delimited_list
+    default: ""
   data_volume_size:
     type: number
     description: Data Volume size in GB
+    default: 0
   instance_flavor:
     type: string
   security_group:
@@ -45,6 +48,7 @@ parameters:
     description: Name of private subnet into which server get deployed
   private_ip:
     type: comma_delimited_list
+    default: ""
     description: List of private IP's to be assigned to the deployed instances
   configure_private_ip:
     type: boolean
@@ -54,6 +58,7 @@ parameters:
     description: Name of the network with public access used for floating IP
   floating_ip:
     type: comma_delimited_list
+    default: ""
     description: List of floating IP's to be assigned to the deployed instances
   configure_floating_ip_manually:
     type: boolean
