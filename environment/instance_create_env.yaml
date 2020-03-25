@@ -25,3 +25,28 @@ parameters:
   root_password: 
   
   server_count: 1
+  
+  listener_count: 0
+  lbvip:
+  lb_floating_ip:
+  configure_lb_floating_ip_manually:
+  configure_lb_floating_ip_dhcp:
+
+  listener_protocol: ["TCP", "HTTP", "HTTPS", "TERMINATED_HTTPS"]
+  #The value must be in the range 1 to 65535.
+  frontend_protocol_port: ["21", "80", "443"]
+  backend_protocol_port: ["21", "80", "443"]
+  connection_limit: ["-1", "500000"]
+  
+  #Allowed values: "ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"
+  lb_algorithm: 
+  pool_protocol: ["TCP", "HTTP", "HTTPS"]
+
+  #Allowed values: "PING", "TCP", "HTTP", "HTTPS"
+  monitor_type:
+  #The value must be at least 0.
+  monitor_delay:
+  #The value must be in the range 1 to 10.
+  monitor_max_retries:
+  #The value must be at least 0.
+  monitor_timeout:

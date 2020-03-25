@@ -39,6 +39,8 @@ parameters:
     type: string
     default: haee
     description: Security group for instance port
+  security_group_lb:
+    type: string
   key_name:
     type: string
     description: SSH pub key to be setup for the user specified in 'project_user' parameter
@@ -91,6 +93,14 @@ parameters:
     type: number
     description: Index number of a spawned instance
 
+# load balancer
+  listener_count:
+    type: number
+    default: 0
+  poolids:
+    type: comma_delimited_list
+  backend_protocol_ports:
+    type: comma_delimited_list
 
 
 resources:
@@ -149,7 +159,12 @@ resources:
         - - subnet: { get_param: private_subnet }
             ip_address: { get_param: [private_ip, get_param: index] }
         - - subnet: { get_param: private_subnet }
-      security_groups: [{ get_param: security_group }]
+      security_groups: 
+        if:
+        - "listener_count_is_not_zero"
+        - - { get_param: security_group }
+          - { get_param: security_group_lb }
+        - - { get_param: security_group }
       
 # optional resources
 
@@ -183,7 +198,7 @@ resources:
     condition: data_volume_size_is_not_zero
     depends_on: [ data_volume ]
     properties:
-      instance_uuid:
+      instance_uuid: 
         if:
         - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
         - get_resource: my_server
@@ -221,6 +236,28 @@ resources:
       floatingip_id: { get_resource: my_server_floating_ip_dhcp }
       port_id: { get_resource: my_server_port }
 
+# loadbalancer member
+
+  member:
+    type: OS::Heat::ResourceGroup
+    depends_on: my_server
+    condition: listener_count_is_not_zero
+    properties:
+      count: { get_param: listener_count }
+      resource_def:
+        type: ./lb_member_create.yaml
+        properties:
+          address: 
+            if:
+            - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+            - { get_attr: [ my_server, first_address ] }
+            - { get_attr: [ my_server_os_volume, first_address ] }
+          poolids: { get_param: poolids }
+          backend_protocol_ports: { get_param: backend_protocol_ports }
+          private_subnet: { get_param: private_subnet }
+          
+          index: "%index%"                    
+
 # cloud-config resources
 
   user_management:
@@ -234,7 +271,6 @@ resources:
             $user: { get_param: project_user }
             $ssh_pub_key: { get_param: ssh_pub_key }
             $root_pw: { get_param: root_password }
-        
 
   epel_repo:
     type: OS::Heat::SoftwareConfig
@@ -248,6 +284,29 @@ resources:
       parts:
       - config: { get_resource: user_management }
       - config: { get_resource: epel_repo }
+
+# softwareconfig playbooks
+
+#  webserver_config:
+#    type: OS::Heat::SoftwareConfig
+#    properties:
+#      group: ansible
+#      config: { get_file: ../playbooks/webserver.yaml }
+#      inputs:
+#        - name: index
+#
+#  webserver_deploy:
+#    type: OS::Heat::SoftwareDeployment
+#    depends_on: [ server_init ]
+#    properties:
+#      config: { get_resource: webserver_config }
+#      server: 
+#        if:
+#        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+#        - { get_resource: my_server }
+#        - { get_resource: my_server_os_volume }
+#      input_values:
+#        index: { get_param: index }
 
 outputs:
   instance_ip:
@@ -269,6 +328,11 @@ outputs:
     condition: create_floating_ip_dhcp
     description: The public IP address of the server
     value: { get_attr: [my_server_floating_ip_dhcp, floating_ip_address] }
+
+  poolids:
+    condition: listener_count_is_not_zero
+    description: pool id
+    value: { get_param: poolids }
 
 conditions:
   configure_private_ip_manually:
@@ -311,4 +375,9 @@ conditions:
     not:
       equals:
         - get_param: data_volume_size
+        - 0
+  listener_count_is_not_zero:
+    not:
+      equals:
+        - { get_param: listener_count }
         - 0

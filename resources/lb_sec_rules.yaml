@@ -1,0 +1,21 @@
+heat_template_version: 2018-08-31
+
+description: Create security group rules for load balancer
+
+parameters:
+
+  security_group_lb:
+    type: string
+  backend_protocol_port:
+    type: comma_delimited_list
+    
+  index:
+    type: number
+
+resources:
+  lb_sec_rules:
+    type: OS::Neutron::SecurityGroupRule
+    properties:
+      security_group: { get_param: security_group_lb } 
+      port_range_max: { get_param:  [backend_protocol_port, {get_param: index}] }
+      port_range_min: { get_param:  [backend_protocol_port, {get_param: index}] }

@@ -1,0 +1,31 @@
+heat_template_version: 2018-08-31
+
+description: Create loadbalancer member
+
+parameters:
+  address:
+    type: string
+  poolids:
+    type: comma_delimited_list
+  backend_protocol_ports:
+    type: comma_delimited_list
+  private_subnet:
+    type: string
+    
+  index:
+    type: number
+
+
+resources:
+  member:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      address: { get_param: address }
+      pool: { get_param: [ poolids, { get_param: index } ] }
+      protocol_port: { get_param: [ backend_protocol_ports, { get_param: index } ] }
+      subnet: { get_param: private_subnet }
+
+outputs:
+  poolids:
+    description: Pool ID
+    value: {get_param: poolids}

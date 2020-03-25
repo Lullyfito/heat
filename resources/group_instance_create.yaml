@@ -82,9 +82,213 @@ parameters:
     
   server_count:
     type: number
+    
+# load balancer
+  listener_count:
+    type: number
+    default: 0
+  lbvip:
+    type: string
+    default: ""
+#  lb_provider:
+#    type: string
+
+  lb_floating_ip:
+    type: comma_delimited_list
+    default: ""
+    description: floating IP to be assigned to the loadbalancer
+  configure_lb_floating_ip_manually:
+    type: boolean
+    default: no
+  configure_lb_floating_ip_dhcp:
+    type: boolean
+    default: no
+
+# listener
+  listener_protocol:
+    type: comma_delimited_list
+    default: ""
+#    constraints:
+#      - allowed_values:
+#        - ""
+#        - TCP
+#        - HTTP
+#        - HTTPS
+#        - TERMINATED_HTTPS
+#        description: Allowed values "TCP", "HTTP", "HTTPS", "TERMINATED_HTTPS"
+  frontend_protocol_port:
+    type: comma_delimited_list
+    default: ""
+  backend_protocol_port:
+    type: comma_delimited_list
+    default: ""
+  connection_limit:
+    type: comma_delimited_list
+    default: ""
+
+# pool
+  lb_algorithm:
+    type: string
+    default: ""
+    constraints:
+      - allowed_values:
+        - ""
+        - ROUND_ROBIN
+        - LEAST_CONNECTIONS
+        - SOURCE_IP
+        description: Allowed values "ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP"
+  pool_protocol:
+    type: comma_delimited_list
+    default: ""
+#    constraints:
+#      - allowed_values:
+#        - ""
+#        - TCP
+#        - HTTP
+#        - HTTPS
+#        description: Allowed values "TCP", "HTTP", "HTTPS"
+  poolids:
+    type: comma_delimited_list
+    default: ""
+
+# monitor
+  monitor_type:
+    type: string
+    default: TCP
+    constraints:
+      - allowed_values:
+        - PING
+        - TCP
+        - HTTP
+        - HTTPS
+        description: Allowed values "PING", "TCP", "HTTP", "HTTPS"
+  monitor_delay:
+    type: number
+    default: 5
+    constraints:
+      - range: { min: 0 }
+        description: The value must be at least 0.
+  monitor_max_retries:
+    type: number
+    default: 3
+    constraints:
+      - range: { min: 0, max: 10 }
+        description: The value must be in the range 1 to 10.
+  monitor_timeout:
+    type: number
+    default: 10
+    constraints:
+      - range: { min: 0 }
+        description: The value must be at least 0.
 
 resources:
   
+  load_balancer:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    condition: listener_count_is_not_zero_and_lbvip_is_not_empty
+    properties:
+      name:
+        str_replace:
+          template: stackname-loadbalancer
+          params:
+            stackname: { get_param: "OS::stack_name" }
+#      provider: { get_param: lb_provider }
+      vip_subnet: { get_param: private_subnet }
+      vip_address: { get_param: lbvip }
+
+  load_balancer:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    condition: listener_count_is_not_zero_and_lbvip_is_empty
+    properties:
+      name:
+        str_replace:
+          template: stackname-loadbalancer
+          params:
+            stackname: { get_param: "OS::stack_name" }
+#      provider: { get_param: lb_provider }
+      vip_subnet: { get_param: private_subnet }
+
+  lb_sec_group:
+    type: OS::Neutron::SecurityGroup
+    condition: listener_count_is_not_zero
+    properties:
+      name:
+        str_replace:
+          template: stackname-loadbalancer
+          params:
+            stackname: { get_param: "OS::stack_name" }
+            
+  lb_sec_rules_group:
+    type: OS::Heat::ResourceGroup
+    depends_on: lb_sec_group
+    condition: listener_count_is_not_zero
+    properties:
+      count: {get_param: listener_count }
+      resource_def:
+        type: ./lb_sec_rules.yaml
+        properties:
+          security_group_lb: { get_resource: lb_sec_group }
+          backend_protocol_port: { get_param: backend_protocol_port }
+          
+          index: "%index%"
+        
+
+  lb_floating_ip_manually:
+    type: OS::Neutron::FloatingIP
+    condition: create_lb_floating_ip_manually
+    properties:
+      floating_network: { get_param: public_net } 
+      floating_ip_address: { get_param: lb_floating_ip }
+
+  lb_floating_ip_manually_association:
+    type: OS::Neutron::FloatingIPAssociation
+    condition: create_lb_floating_ip_manually
+    depends_on: [ load_balancer, lb_floating_ip_manually ]
+    properties:
+      floatingip_id: { get_resource: lb_floating_ip_manually }
+      port_id: { get_attr: [load_balancer, vip_port_id] }
+      
+  lb_floating_ip_dhcp:
+    type: OS::Neutron::FloatingIP
+    condition: create_lb_floating_ip_dhcp
+    properties:
+      floating_network: { get_param: public_net } 
+
+  lb_floating_ip_dhcp_association:
+    type: OS::Neutron::FloatingIPAssociation
+    condition: create_lb_floating_ip_dhcp
+    depends_on: [ load_balancer, lb_floating_ip_dhcp ]
+    properties:
+      floatingip_id: { get_resource: lb_floating_ip_dhcp }
+      port_id: { get_attr: [load_balancer, vip_port_id] }
+
+  lb_group:
+    type: OS::Heat::ResourceGroup
+    depends_on: load_balancer
+    condition: listener_count_is_not_zero
+    properties:
+      count: {get_param: listener_count }
+      resource_def:
+        type: ./lb_create.yaml
+        properties:
+          stackname: { get_param: "OS::stack_name" }
+          listener_protocol: { get_param: listener_protocol }
+          frontend_protocol_port: { get_param: frontend_protocol_port }
+          connection_limit: {get_param: connection_limit }
+          load_balancer: { get_resource: load_balancer }
+          
+          lb_algorithm: { get_param: lb_algorithm }
+          pool_protocol: { get_param: pool_protocol }
+          
+          monitor_type: { get_param: monitor_type}
+          monitor_delay: { get_param: monitor_delay}
+          monitor_max_retries: { get_param: monitor_max_retries}
+          monitor_timeout: { get_param: monitor_timeout}
+          
+          backend_protocol_port: { get_param: backend_protocol_port }
+          
+          index: "%index%"
+          
   my_indexed_group:
     type: OS::Heat::ResourceGroup
     properties:
@@ -105,6 +309,7 @@ resources:
           data_volume_size: { get_param: data_volume_size }
           instance_flavor: { get_param: instance_flavor }
           security_group: { get_param: security_group }
+          security_group_lb: { get_resource: lb_sec_group }
           key_name: { get_param: key_name }
           private_net: { get_param: private_net }
           private_subnet: { get_param: private_subnet }
@@ -121,3 +326,71 @@ resources:
           root_password: { get_param: root_password }
           
           index: "%index%"
+          
+          listener_count: { get_param: listener_count }
+          poolids:
+            if: 
+            - "listener_count_is_not_zero"
+#            - get_attr: [lb_group.{ get_param: index }.listener, default_pool_id]
+#            - get_attr: [load_balancer, pools]
+            - get_attr: [lb_group, poolID]
+            - get_param: poolids
+          backend_protocol_ports: { get_param: backend_protocol_port }
+#          backend_protocol_ports:
+#            if: 
+#            - "listener_count_is_not_zero"
+#            - get_attr: [lb_group, backend_portNum]
+#            - get_param: backend_protocol_port
+
+
+conditions:
+  lbvip_is_not_empty:
+    not:
+      equals:
+        - { get_param: lbvip }
+        - ""
+  lbvip_is_empty:
+    not: lbvip_is_not_empty
+  listener_count_is_not_zero:
+    not:
+      equals:
+        - { get_param: listener_count }
+        - 0
+  listener_count_is_not_zero_and_lbvip_is_not_empty:
+    and:
+      - listener_count_is_not_zero
+      - lbvip_is_not_empty
+  listener_count_is_not_zero_and_lbvip_is_empty:
+    and:
+      - listener_count_is_not_zero
+      - lbvip_is_empty
+  create_lb_floating_ip_manually:
+    equals:
+      - get_param: configure_lb_floating_ip_manually
+      - yes
+  create_lb_floating_ip_dhcp:
+    equals:
+      - get_param: configure_lb_floating_ip_dhcp
+      - yes
+      
+outputs:
+#  defaultpoolid:
+#    condition: listener_count_is_not_zero
+#    description: load balancer pool ids
+#    value: { get_attr: [lb_group.{ get_param: index }.listener, default_pool_id] }
+  poolIDList:
+    condition: listener_count_is_not_zero
+    description: load balancer pool ids
+    value: { get_attr: [lb_group, poolID] }
+  poolIDListBal:
+    condition: listener_count_is_not_zero
+    description: load balancer pool ids
+    value: { get_attr: [load_balancer, pools] }
+  frontend_portList:
+    condition: listener_count_is_not_zero
+    description: load balancer frontend port number
+    value: { get_attr: [lb_group, frontend_portNum] }
+  backtend_portList:
+    condition: listener_count_is_not_zero
+    description: load balancer backend port number
+    value: { get_attr: [lb_group, backend_portNum] }

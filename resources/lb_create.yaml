@@ -1,0 +1,93 @@
+heat_template_version: 2018-08-31
+
+description: Create listener, pool and monitor for a loadbalancer
+
+parameters:
+# listener
+  stackname:
+    type: string
+  listener_protocol:
+    type: comma_delimited_list
+  frontend_protocol_port:
+    type: comma_delimited_list
+  connection_limit:
+    type: comma_delimited_list
+  load_balancer:
+    type: string
+
+# pool
+  lb_algorithm:
+    type: string
+  pool_protocol:
+    type: comma_delimited_list
+
+# monitor
+  monitor_type:
+    type: string
+    default: TCP
+  monitor_delay:
+    type: number
+    default: 5
+  monitor_max_retries:
+    type: number
+    default: 3
+  monitor_timeout:
+    type: number
+    default: 10
+  
+
+# outputs
+  backend_protocol_port:
+    type: comma_delimited_list
+
+
+  index:
+    type: number
+
+
+resources:
+  listener:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      name:
+        str_replace:
+          template: stackname_listener_protocol_port
+          params:
+            stackname: { get_param: stackname }
+            protocol_port: { get_param:  [frontend_protocol_port, {get_param: index}] }
+      protocol: {get_param: [listener_protocol, {get_param: index}] }
+      protocol_port: { get_param:  [frontend_protocol_port, {get_param: index}] }
+      connection_limit: { get_param:  [connection_limit, {get_param: index}] }
+      loadbalancer: { get_param: load_balancer }
+
+
+
+  pool:
+    type: OS::Neutron::LBaaS::Pool
+    depends_on: [ listener ]
+    properties:
+      lb_algorithm: { get_param: lb_algorithm }
+      protocol: { get_param:  [pool_protocol, {get_param: index}] }
+      listener: { get_resource: listener }
+
+  monitor:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    depends_on: [ pool ]
+    properties:
+      type: { get_param: monitor_type }
+      delay: { get_param: monitor_delay }
+      max_retries: { get_param: monitor_max_retries }
+      timeout: { get_param: monitor_timeout }
+      pool: { get_resource: pool }
+
+
+outputs:
+  poolID:
+    description: LB pool id
+    value: { get_resource: pool }
+  frontend_portNum:
+    description: Listener protocol port number
+    value: { get_param:  [frontend_protocol_port, {get_param: index}] }
+  backend_portNum:
+    description: Pool member protocol port number
+    value: { get_param:  [backend_protocol_port, {get_param: index}] }
