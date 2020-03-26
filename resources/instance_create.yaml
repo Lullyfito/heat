@@ -287,26 +287,64 @@ resources:
 
 # softwareconfig playbooks
 
-#  webserver_config:
-#    type: OS::Heat::SoftwareConfig
-#    properties:
-#      group: ansible
-#      config: { get_file: ../playbooks/webserver.yaml }
-#      inputs:
-#        - name: index
-#
-#  webserver_deploy:
-#    type: OS::Heat::SoftwareDeployment
-#    depends_on: [ server_init ]
-#    properties:
-#      config: { get_resource: webserver_config }
-#      server: 
-#        if:
-#        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
-#        - { get_resource: my_server }
-#        - { get_resource: my_server_os_volume }
-#      input_values:
-#        index: { get_param: index }
+  webserver_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/webserver.yaml }
+      inputs:
+        - name: index
+
+  webserver_deploy:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ server_init ]
+    properties:
+      config: { get_resource: webserver_config }
+      server: 
+        if:
+        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+        - { get_resource: my_server }
+        - { get_resource: my_server_os_volume }
+      input_values:
+        index: { get_param: index }
+        
+  webserverssl_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/webserver_ssl.yaml }
+
+  webserverssl_deploy:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ server_init ]
+    properties:
+      config: { get_resource: webserverssl_config }
+      server: 
+        if:
+        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+        - { get_resource: my_server }
+        - { get_resource: my_server_os_volume }
+        
+  ftpserver_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/ftpserver.yaml }
+      inputs:
+        - name: index
+
+  ftpserver_deploy:
+    type: OS::Heat::SoftwareDeployment
+    depends_on: [ server_init ]
+    properties:
+      config: { get_resource: ftpserver_config }
+      server: 
+        if:
+        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+        - { get_resource: my_server }
+        - { get_resource: my_server_os_volume }
+      input_values:
+        index: { get_param: index }
 
 outputs:
   instance_ip:

@@ -94,7 +94,7 @@ parameters:
 #    type: string
 
   lb_floating_ip:
-    type: comma_delimited_list
+    type: string
     default: ""
     description: floating IP to be assigned to the loadbalancer
   configure_lb_floating_ip_manually:
@@ -291,6 +291,7 @@ resources:
           
   my_indexed_group:
     type: OS::Heat::ResourceGroup
+    depends_on: [lb_sec_rules_group, lb_group]
     properties:
       count: { get_param: server_count }
       resource_def:
@@ -331,17 +332,23 @@ resources:
           poolids:
             if: 
             - "listener_count_is_not_zero"
-#            - get_attr: [lb_group.{ get_param: index }.listener, default_pool_id]
-#            - get_attr: [load_balancer, pools]
             - get_attr: [lb_group, poolID]
             - get_param: poolids
           backend_protocol_ports: { get_param: backend_protocol_port }
-#          backend_protocol_ports:
-#            if: 
-#            - "listener_count_is_not_zero"
-#            - get_attr: [lb_group, backend_portNum]
-#            - get_param: backend_protocol_port
 
+outputs:
+  poolIDList:
+    condition: listener_count_is_not_zero
+    description: load balancer pool ids
+    value: { get_attr: [lb_group, poolID] }
+  frontend_portList:
+    condition: listener_count_is_not_zero
+    description: load balancer frontend port number
+    value: { get_attr: [lb_group, frontend_portNum] }
+  backtend_portList:
+    condition: listener_count_is_not_zero
+    description: load balancer backend port number
+    value: { get_attr: [lb_group, backend_portNum] }
 
 conditions:
   lbvip_is_not_empty:
@@ -372,25 +379,3 @@ conditions:
     equals:
       - get_param: configure_lb_floating_ip_dhcp
       - yes
-      
-outputs:
-#  defaultpoolid:
-#    condition: listener_count_is_not_zero
-#    description: load balancer pool ids
-#    value: { get_attr: [lb_group.{ get_param: index }.listener, default_pool_id] }
-  poolIDList:
-    condition: listener_count_is_not_zero
-    description: load balancer pool ids
-    value: { get_attr: [lb_group, poolID] }
-  poolIDListBal:
-    condition: listener_count_is_not_zero
-    description: load balancer pool ids
-    value: { get_attr: [load_balancer, pools] }
-  frontend_portList:
-    condition: listener_count_is_not_zero
-    description: load balancer frontend port number
-    value: { get_attr: [lb_group, frontend_portNum] }
-  backtend_portList:
-    condition: listener_count_is_not_zero
-    description: load balancer backend port number
-    value: { get_attr: [lb_group, backend_portNum] }
