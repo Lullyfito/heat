@@ -1,0 +1,4 @@
+#cloud-config
+
+runcmd:
+  - touch /etc/sysconfig/64bit_strstr_via_64bit_strstr_sse2_unaligned

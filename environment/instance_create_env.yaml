@@ -50,3 +50,9 @@ parameters:
   monitor_max_retries:
   #The value must be at least 0.
   monitor_timeout:
+
+#parameter_defaults:
+  deploy_webserver:
+  deploy_webserverssl:
+  deploy_ftpserver:
+  deploy_docker:

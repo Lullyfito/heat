@@ -1,0 +1,144 @@
+heat_template_version: 2018-08-31
+
+description: Running all ansible playbooks to customize a server
+
+parameters:
+
+  my_server_res:
+    type: string
+    
+  index:
+    type: number
+    description: Index number of a spawned instance
+  deploy_webserver:
+    type: boolean
+    default: no
+  deploy_webserverssl:
+    type: boolean
+    default: no
+  deploy_ftpserver:
+    type: boolean
+    default: no
+    
+  user:
+    type: string
+  deploy_docker:
+    type: boolean
+    default: no
+
+
+resources:
+
+# softwareconfig playbooks
+
+  webserver_config:
+    type: OS::Heat::SoftwareConfig
+    condition: deploy_webserver
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/webserver.yaml }
+      inputs:
+        - name: index
+
+  webserver_deploy:
+    type: OS::Heat::SoftwareDeployment
+    condition: deploy_webserver
+    properties:
+      config: { get_resource: webserver_config }
+      server: { get_param: my_server_res }
+      input_values:
+        index: { get_param: index }
+        
+  webserverssl_config:
+    type: OS::Heat::SoftwareConfig
+    condition: deploy_webserverssl
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/webserver_ssl.yaml }
+
+  webserverssl_deploy:
+    type: OS::Heat::SoftwareDeployment
+    condition: deploy_webserverssl
+    properties:
+      config: { get_resource: webserverssl_config }
+      server: { get_param: my_server_res }
+        
+  ftpserver_config:
+    type: OS::Heat::SoftwareConfig
+    condition: deploy_ftpserver
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/ftpserver.yaml }
+      inputs:
+        - name: index
+
+  ftpserver_deploy:
+    type: OS::Heat::SoftwareDeployment
+    condition: deploy_ftpserver
+    properties:
+      config: { get_resource: ftpserver_config }
+      server: { get_param: my_server_res }
+      input_values:
+        index: { get_param: index }
+       
+  docker_config:
+    type: OS::Heat::SoftwareConfig
+    condition: deploy_docker
+    properties:
+      group: ansible
+      config: { get_file: ../playbooks/docker.yaml }
+      inputs:
+        - name: user
+
+  docker_deploy:
+    type: OS::Heat::SoftwareDeployment
+    condition: deploy_docker
+    properties:
+      config: { get_resource: docker_config }
+      server: { get_param: my_server_res }
+      input_values:
+        user: { get_param: user }       
+
+outputs:
+  webserver_deploy_stdout:
+    condition: deploy_webserver
+    value: { get_attr: [webserver_deploy, deploy_stdout] }
+  webserver_deploy_stderr:
+    condition: deploy_webserver
+    value: { get_attr: [webserver_deploy, deploy_stderr] }
+  webserverssl_deploy_stdout:
+    condition: deploy_webserverssl
+    value: { get_attr: [webserverssl_deploy, deploy_stdout] }
+  webserverssl_deploy_stderr:
+    condition: deploy_webserverssl
+    value: { get_attr: [webserverssl_deploy, deploy_stderr] }
+  ftpserver_deploy_stdout:
+    condition: deploy_ftpserver
+    value: { get_attr: [ftpserver_deploy, deploy_stdout] }
+  ftpserver_deploy_stderr:
+    condition: deploy_ftpserver
+    value: { get_attr: [ftpserver_deploy, deploy_stderr] }
+  docker_deploy_stdout:
+    condition: deploy_docker
+    value: { get_attr: [docker_deploy, deploy_stdout] }
+  docker_deploy_stderr:
+    condition: deploy_docker
+    value: { get_attr: [docker_deploy, deploy_stderr] }
+
+conditions:
+  deploy_webserver:
+    equals:
+      - get_param: deploy_webserver
+      - yes
+  deploy_webserverssl:
+    equals:
+      - get_param: deploy_webserverssl
+      - yes
+  deploy_ftpserver:
+    equals:
+      - get_param: deploy_ftpserver
+      - yes
+  deploy_docker:
+    equals:
+      - get_param: deploy_docker
+      - yes

@@ -41,6 +41,7 @@ parameters:
     description: Security group for instance port
   security_group_lb:
     type: string
+    description: Security group for lb port
   key_name:
     type: string
     description: SSH pub key to be setup for the user specified in 'project_user' parameter
@@ -102,6 +103,20 @@ parameters:
   backend_protocol_ports:
     type: comma_delimited_list
 
+# software-config
+
+  deploy_webserver:
+    type: boolean
+    default: no
+  deploy_webserverssl:
+    type: boolean
+    default: no
+  deploy_ftpserver:
+    type: boolean
+    default: no
+  deploy_docker:
+    type: boolean
+    default: no
 
 resources:
 # instance creation with ephemeral (temporary) root disk
@@ -278,73 +293,39 @@ resources:
       group: cloud-config
       config: { get_file: ../userdata/epel_repo }
 
+  curl_fix:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: cloud-config
+      config: { get_file: ../userdata/curl_fix }
+
   server_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
       - config: { get_resource: user_management }
       - config: { get_resource: epel_repo }
+      - config: { get_resource: curl_fix }
 
-# softwareconfig playbooks
+# software-config resources
 
-  webserver_config:
-    type: OS::Heat::SoftwareConfig
+  soft_config:
+    type: ./software_configuration.yaml
     properties:
-      group: ansible
-      config: { get_file: ../playbooks/webserver.yaml }
-      inputs:
-        - name: index
-
-  webserver_deploy:
-    type: OS::Heat::SoftwareDeployment
-    depends_on: [ server_init ]
-    properties:
-      config: { get_resource: webserver_config }
-      server: 
+      my_server_res:
         if:
-        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
-        - { get_resource: my_server }
-        - { get_resource: my_server_os_volume }
-      input_values:
-        index: { get_param: index }
-        
-  webserverssl_config:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      group: ansible
-      config: { get_file: ../playbooks/webserver_ssl.yaml }
+          - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
+          - { get_resource: my_server }
+          - { get_resource: my_server_os_volume }
+      
+      index: { get_param: index }
+      deploy_webserver: { get_param: deploy_webserver }
+      deploy_webserverssl: { get_param: deploy_webserverssl }
+      deploy_ftpserver: { get_param: deploy_ftpserver }
+      
+      user: { get_param: project_user }
+      deploy_docker: { get_param: deploy_docker }
 
-  webserverssl_deploy:
-    type: OS::Heat::SoftwareDeployment
-    depends_on: [ server_init ]
-    properties:
-      config: { get_resource: webserverssl_config }
-      server: 
-        if:
-        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
-        - { get_resource: my_server }
-        - { get_resource: my_server_os_volume }
-        
-  ftpserver_config:
-    type: OS::Heat::SoftwareConfig
-    properties:
-      group: ansible
-      config: { get_file: ../playbooks/ftpserver.yaml }
-      inputs:
-        - name: index
-
-  ftpserver_deploy:
-    type: OS::Heat::SoftwareDeployment
-    depends_on: [ server_init ]
-    properties:
-      config: { get_resource: ftpserver_config }
-      server: 
-        if:
-        - "os_volume_size_is_zero_and_restore_os_type_source_volume_is_not_true_and_restore_os_type_source_snapshot_is_not_true"
-        - { get_resource: my_server }
-        - { get_resource: my_server_os_volume }
-      input_values:
-        index: { get_param: index }
 
 outputs:
   instance_ip:
