@@ -1,0 +1,24 @@
+---
+- name: Install and setup docker
+  hosts: localhost
+  connection: local
+
+  vars:
+    user: "{{ user }}"
+
+  tasks:
+  - name: Download docker setup script
+    command: curl -fsSL https://get.docker.com -o get-docker.sh
+    
+    
+  - name: Run get-docker.sh
+    command: sh get-docker.sh
+    
+  - name: Add docker group to a user
+    command: "usermod -aG docker {{ user }}"
+    
+  - name: Start and enable docker service
+    service:
+      name: docker
+      state: started
+      enabled: yes

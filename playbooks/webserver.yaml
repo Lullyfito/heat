@@ -1,0 +1,30 @@
+---
+- name: Install and configure apache server
+  hosts: localhost
+  connection: local
+
+  vars:
+    var_index: "{{ index }}"
+
+  tasks:
+  
+  - name: Install httpd package
+    yum:
+      name: httpd
+      state: present
+
+  - name: Start and enable httpd service
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+
+  - name: Create index.html file
+    shell: echo WebServer number {{ var_index }} > /var/www/html/index.html
+    notify: restart httpd
+
+  handlers:
+  - name: restart httpd
+    service:
+      name: httpd
+      state: restarted

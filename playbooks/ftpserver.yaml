@@ -1,0 +1,23 @@
+---
+- name: Install and configure ftp server
+  hosts: localhost
+  connection: local
+
+  vars:
+    var_index: "{{ index }}"
+
+  tasks:
+  
+  - name: Install ftp package
+    yum:
+      name: vsftpd
+      state: present
+
+  - name: Start and enable vsftpd service
+    service:
+      name: vsftpd
+      state: started
+      enabled: yes
+
+  - name: Create a file and save on ftp server
+    shell: echo FTPServer number {{ var_index }} > /var/ftp/pub/file_{{ var_index }}
